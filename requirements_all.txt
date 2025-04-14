@@ -627,9 +627,6 @@ bleak==0.22.3
 # homeassistant.components.blebox
 blebox-uniapi==2.5.0
 
-# homeassistant.components.blink
-blinkpy==0.23.0
-
 # homeassistant.components.bitcoin
 blockchain==1.4.4
 
