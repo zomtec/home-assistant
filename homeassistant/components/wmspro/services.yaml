@@ -1,0 +1,30 @@
+set_position_and_tilt:
+  name: "Set position and tilt"
+  description: "Sets both the cover position and the slat tilt in a single command."
+  target:
+    entity:
+      integration: wmspro
+      domain: cover
+  fields:
+    position:
+      name: "Position"
+      description: "Target position of the cover (0 = Open/Up, 100 = Closed/Down)."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    tilt_position:
+      name: "Tilt position"
+      description: "Target tilt of the slats (0 = Open, 100 = Closed)."
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider

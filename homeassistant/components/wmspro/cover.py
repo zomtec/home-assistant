@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 from typing import Any
 
+import voluptuous as vol
 from wmspro.const import (
     WMS_WebControl_pro_API_actionDescription as ACTION_DESC,
     WMS_WebControl_pro_API_actionType,
@@ -19,6 +21,7 @@ from homeassistant.components.cover import (
     CoverEntity,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
@@ -28,6 +31,8 @@ from homeassistant.util.percentage import (
 from . import WebControlProConfigEntry
 from .const import DOMAIN
 from .entity import WebControlProGenericEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=10)
 PARALLEL_UPDATES = 1
@@ -56,6 +61,20 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
+    platform = entity_platform.async_get_current_platform()
+
+    platform.async_register_entity_service(
+        "set_position_and_tilt",
+        {
+            vol.Required(ATTR_POSITION): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=100)
+            ),
+            vol.Required(ATTR_TILT_POSITION): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=100)
+            ),
+        },
+        "set_cover_position_and_rotation",
+    )
 
 class WebControlProCover(WebControlProGenericEntity, CoverEntity):
     """Base representation of a WMS based cover."""
@@ -99,6 +118,12 @@ class WebControlProCover(WebControlProGenericEntity, CoverEntity):
         )
         await action(responseType=WMS_WebControl_pro_API_responseType.Detailed)
 
+    async def set_cover_position_and_rotation(self, **kwargs: Any) -> None:
+        """Fallback for covers, which do not support this action."""
+        _LOGGER.warning(
+            "The cover %s does not support moving and rotating at the same time.",
+            self.entity_id
+        )
 
 class WebControlProAwning(WebControlProCover):
     """Representation of a WMS based awning."""
@@ -165,6 +190,18 @@ class WebControlProSlatRotate(WebControlProSlat):
             await self.async_open_cover()
         else:
             await super().async_set_cover_position(**kwargs)
+
+    async def set_cover_position_and_rotation(self, **kwargs: Any) -> None:
+        """Set the cover to a target position and rotation."""
+        action_drive = self._dest.action(self._drive_action_desc)
+        action_list = action_drive.prep(percentage=100 - kwargs[ATTR_POSITION])
+        action_tilt = self._dest.action(self._tilt_action_desc)
+        rotation = percentage_to_ranged_value(
+            (self._min_rotation, self._max_rotation),
+            100 - kwargs[ATTR_TILT_POSITION],
+        )
+        action_list += action_tilt.prep(rotation=rotation)
+        await action_list()
 
     @property
     def current_cover_tilt_position(self) -> int | None:
