@@ -8,7 +8,7 @@ set_position_and_tilt:
   fields:
     position:
       name: "Position"
-      description: "Target position of the cover (0 = Open/Up, 100 = Closed/Down)."
+      description: "Target position of the cover (0 = Closed/Down, 100 = Open/Up)."
       required: true
       selector:
         number:
@@ -19,7 +19,7 @@ set_position_and_tilt:
           mode: slider
     tilt_position:
       name: "Tilt position"
-      description: "Target tilt of the slats (0 = Open, 100 = Closed)."
+      description: "Target tilt of the slats (0 = Closed, 100 = Open)."
       required: true
       selector:
         number:
