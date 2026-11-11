@@ -19,18 +19,14 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the WMS based identify buttons from a config entry."""
-    hub = config_entry.runtime_data
+    hub = config_entry.runtime_data.hub
 
     entities: list[WebControlProGenericEntity] = []
     for dest in hub.dests.values():
         if dest.hasAction(ACTION_DESC.Identify):
-            entities.append(
-                WebControlProIdentifyButton(hass, config_entry.entry_id, dest)
-            )
+            entities.append(WebControlProIdentifyButton(hass, config_entry, dest))
         if dest.hasAction(ACTION_DESC.SlatRotate):
-            entities.append(
-                WebControlProRotationResetButton(hass, config_entry.entry_id, dest)
-            )
+            entities.append(WebControlProRotationResetButton(hass, config_entry, dest))
 
     async_add_entities(entities)
 
@@ -60,4 +56,7 @@ class WebControlProRotationResetButton(WebControlProGenericEntity, ButtonEntity)
         # Delete the min and max override values to reset the rotation range to the default
         del action["minValue"]
         del action["maxValue"]
-        # The library will take care of the update and persistence on the next poll refresh
+        # Persist the change now and let the entities of the destination
+        # write their state, no status request is needed for this.
+        await action.sync()
+        self._poller.async_notify(self._dest.id)

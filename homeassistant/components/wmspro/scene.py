@@ -11,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebControlProConfigEntry
-from .const import ATTRIBUTION, DOMAIN, MANUFACTURER
+from .const import ATTRIBUTION, DOMAIN, MANUFACTURER, SETTLE_DELAY_UNKNOWN_TRAVEL
 
 
 async def async_setup_entry(
@@ -20,11 +20,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the WMS based scenes from a config entry."""
-    hub = config_entry.runtime_data
+    hub = config_entry.runtime_data.hub
 
     async_add_entities(
-        WebControlProScene(hass, config_entry.entry_id, scene)
-        for scene in hub.scenes.values()
+        WebControlProScene(hass, config_entry, scene) for scene in hub.scenes.values()
     )
 
 
@@ -35,10 +34,15 @@ class WebControlProScene(Scene):
     _attr_has_entity_name = True
 
     def __init__(
-        self, hass: HomeAssistant, config_entry_id: str, scene: WMS_Scene
+        self,
+        hass: HomeAssistant,
+        config_entry: WebControlProConfigEntry,
+        scene: WMS_Scene,
     ) -> None:
         """Initialize the entity with the configured scene."""
         super().__init__()
+        config_entry_id = config_entry.entry_id
+        self._poller = config_entry.runtime_data.poller
 
         # Scene information
         self._scene = scene
@@ -66,3 +70,5 @@ class WebControlProScene(Scene):
     async def async_activate(self, **kwargs: Any) -> None:
         """Activate scene. Try to get entities into requested state."""
         await self._scene()
+        # A scene can move any cover, the targets are not known here.
+        self._poller.async_schedule_poll_all(SETTLE_DELAY_UNKNOWN_TRAVEL)

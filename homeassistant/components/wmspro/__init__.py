@@ -1,5 +1,6 @@
 """The WMS WebControl pro API integration."""
 
+from dataclasses import dataclass
 from pathlib import Path
 import shutil
 
@@ -15,7 +16,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR
 from homeassistant.helpers.typing import UNDEFINED, ConfigType
 
-from .const import DOMAIN, MANUFACTURER
+from .const import DOMAIN, MANUFACTURER, STATUS_REQUEST_SPACING
+from .poller import WmsStatusPoller
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -27,7 +29,16 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
 ]
 
-type WebControlProConfigEntry = ConfigEntry[WebControlPro]
+
+@dataclass
+class WebControlProData:
+    """Runtime data of a config entry."""
+
+    hub: WebControlPro
+    poller: WmsStatusPoller
+
+
+type WebControlProConfigEntry = ConfigEntry[WebControlProData]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -54,13 +65,12 @@ async def async_setup_entry(
     config_dir = _build_storage_config_dir(hass, entry)
     config_dir.mkdir(parents=True, exist_ok=True)
     hub = WebControlPro(host, session, str(config_dir))
+    hub._status_wait = STATUS_REQUEST_SPACING  # noqa: SLF001
 
     try:
         await hub.ping()
-    except aiohttp.ClientError as err:
+    except (aiohttp.ClientError, TimeoutError) as err:
         raise ConfigEntryNotReady(f"Error while connecting to {host}") from err
-
-    entry.runtime_data = hub
 
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
@@ -74,14 +84,22 @@ async def async_setup_entry(
         configuration_url=f"http://{hub.host}/system",
     )
 
+    poller = WmsStatusPoller(hass, entry, hub)
     try:
         await hub.refresh()
-        for dest in hub.dests.values():
-            await dest.refresh()
-    except aiohttp.ClientError as err:
+        # One status request per destination, the entities take over the
+        # results from poller.last_outcome when they are added.
+        for dest_id in hub.dests:
+            await poller.async_poll(dest_id, raise_on_error=True)
+    except (aiohttp.ClientError, TimeoutError) as err:
         raise ConfigEntryNotReady(f"Error while refreshing from {host}") from err
 
+    entry.runtime_data = WebControlProData(hub, poller)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    poller.async_start()
+    entry.async_on_unload(poller.async_stop)
 
 
 async def async_unload_entry(

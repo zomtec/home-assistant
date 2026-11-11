@@ -44,6 +44,12 @@
       },
       "rotation-raw": {
         "name": "Raw rotation"
+      },
+      "travel-time-close": {
+        "name": "Travel time closing"
+      },
+      "travel-time-open": {
+        "name": "Travel time opening"
       }
     }
   },

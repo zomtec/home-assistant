@@ -1,6 +1,5 @@
 """Support for loads connected with WMS WebControl pro."""
 
-from datetime import timedelta
 from typing import Any, override
 
 from wmspro.const import (
@@ -13,9 +12,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import WebControlProConfigEntry
+from .const import COMMAND_POLL_DELAY
 from .entity import WebControlProGenericEntity
 
-SCAN_INTERVAL = timedelta(seconds=15)
 PARALLEL_UPDATES = 1
 
 
@@ -25,10 +24,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the WMS based switches from a config entry."""
-    hub = config_entry.runtime_data
+    hub = config_entry.runtime_data.hub
 
     async_add_entities(
-        WebControlProSwitch(hass, config_entry.entry_id, dest)
+        WebControlProSwitch(hass, config_entry, dest)
         for dest in hub.dests.values()
         if dest.hasAction(ACTION_DESC.LoadSwitch)
     )
@@ -53,6 +52,7 @@ class WebControlProSwitch(WebControlProGenericEntity, SwitchEntity):
         await action(
             onOffState=True, responseType=WMS_WebControl_pro_API_responseType.Detailed
         )
+        self._poller.async_schedule_poll(self._dest.id, COMMAND_POLL_DELAY)
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -61,3 +61,4 @@ class WebControlProSwitch(WebControlProGenericEntity, SwitchEntity):
         await action(
             onOffState=False, responseType=WMS_WebControl_pro_API_responseType.Detailed
         )
+        self._poller.async_schedule_poll(self._dest.id, COMMAND_POLL_DELAY)

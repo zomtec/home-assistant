@@ -1,6 +1,5 @@
 """Support for lights connected with WMS WebControl pro."""
 
-from datetime import timedelta
 from typing import Any, override
 
 from wmspro.const import (
@@ -14,10 +13,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.color import brightness_to_value, value_to_brightness
 
 from . import WebControlProConfigEntry
-from .const import BRIGHTNESS_SCALE
+from .const import BRIGHTNESS_SCALE, COMMAND_POLL_DELAY
 from .entity import WebControlProGenericEntity
 
-SCAN_INTERVAL = timedelta(seconds=15)
 PARALLEL_UPDATES = 1
 
 
@@ -27,14 +25,14 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the WMS based lights from a config entry."""
-    hub = config_entry.runtime_data
+    hub = config_entry.runtime_data.hub
 
     entities: list[WebControlProGenericEntity] = []
     for dest in hub.dests.values():
         if dest.hasAction(ACTION_DESC.LightDimming):
-            entities.append(WebControlProDimmer(hass, config_entry.entry_id, dest))
+            entities.append(WebControlProDimmer(hass, config_entry, dest))
         elif dest.hasAction(ACTION_DESC.LightSwitch):
-            entities.append(WebControlProLight(hass, config_entry.entry_id, dest))
+            entities.append(WebControlProLight(hass, config_entry, dest))
 
     async_add_entities(entities)
 
@@ -60,6 +58,7 @@ class WebControlProLight(WebControlProGenericEntity, LightEntity):
         await action(
             onOffState=True, responseType=WMS_WebControl_pro_API_responseType.Detailed
         )
+        self._poller.async_schedule_poll(self._dest.id, COMMAND_POLL_DELAY)
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -68,6 +67,7 @@ class WebControlProLight(WebControlProGenericEntity, LightEntity):
         await action(
             onOffState=False, responseType=WMS_WebControl_pro_API_responseType.Detailed
         )
+        self._poller.async_schedule_poll(self._dest.id, COMMAND_POLL_DELAY)
 
 
 class WebControlProDimmer(WebControlProLight):
@@ -95,3 +95,4 @@ class WebControlProDimmer(WebControlProLight):
             percentage=brightness_to_value(BRIGHTNESS_SCALE, kwargs[ATTR_BRIGHTNESS]),
             responseType=WMS_WebControl_pro_API_responseType.Detailed,
         )
+        self._poller.async_schedule_poll(self._dest.id, COMMAND_POLL_DELAY)
